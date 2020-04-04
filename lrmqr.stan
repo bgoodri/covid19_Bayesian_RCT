@@ -65,11 +65,10 @@ parameters {
   simplex[k] pi;  // category probabilities for a person w/ average predictors
 }
 transformed parameters {
-  vector[p] beta = R_ast_inverse * theta;            // coefficients on X
   vector[k - 1] alpha;                               // intercepts
   vector[N] log_lik;                                 // log-likelihood pieces
   for (j in 2:k) alpha[j - 1] = logit(sum(pi[j:k])); // predictors are CENTERED
-  log_lik = pw_log_lik(alpha, beta, Q_list, y);
+  log_lik = pw_log_lik(alpha, theta, Q_list, y);
 }
 
 model {
@@ -78,5 +77,6 @@ model {
   // implicit: pi ~ dirichlet(ones)
 }
 generated quantities {
-   vector[p] OR = exp(beta);
+  vector[p] beta = R_ast_inverse * theta;            // coefficients on X
+  vector[p] OR = exp(beta);
 }
