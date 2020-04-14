@@ -2,7 +2,8 @@
 // Based on section 13.3.1 of http://hbiostat.org/doc/rms.pdf
 functions { // can check these match rms::orm via rstan::expose_stan_functions
   // pointwise log-likelihood contributions
-  vector pw_log_lik(vector alpha, vector beta, row_vector[] X, int[] y, int[] cluster, vector gamma) {
+  vector pw_log_lik(vector alpha, vector beta, row_vector[] X, int[] y, 
+                    int[] cluster, vector gamma) {
     int N = size(X);
     vector[N] out;
     int k = max(y); // assumes all possible categories are observed
@@ -18,7 +19,8 @@ functions { // can check these match rms::orm via rstan::expose_stan_functions
   }
   
   // Pr(y == j)
-  matrix Pr(vector alpha, vector beta, row_vector[] X, int[] y, int[] cluster, vector gamma) {
+  matrix Pr(vector alpha, vector beta, row_vector[] X, int[] y, 
+            int[] cluster, vector gamma) {
     int N = size(X);
     int k = max(y); // assumes all possible categories are observed
     matrix[N, k] out;
@@ -44,6 +46,7 @@ data {
   
   // prior standard deviations
   vector<lower = 0>[p] sds;
+  real<lower = 0> rate;
 }
 
 transformed data {
@@ -65,22 +68,26 @@ transformed data {
 parameters {
   vector[p] theta; // coefficients on Q_ast
   simplex[k] pi;  // category probabilities for a person w/ average predictors
-  vector[Nc] gamma;  // random effects
+  vector[Nc] gamma_raw;  // unscaled random effects
   real<lower = 0> sigmag;   // SD of random effects
 }
+
 transformed parameters {
   vector[k - 1] alpha;                               // intercepts
+  vector[Nc] gamma = sigmag * gamma_raw;             // scaled random effects
   vector[N] log_lik;                                 // log-likelihood pieces
   for (j in 2:k) alpha[j - 1] = logit(sum(pi[j:k])); // predictors are CENTERED
   log_lik = pw_log_lik(alpha, theta, Q_list, y, cluster, gamma);
 }
 
 model {
-  gamma ~ normal(0, sigmag);
+  gamma_raw ~ std_normal(); // implies: gamma ~ normal(0, sigmag)
+  sigmag ~ exponential(rate); 
   target += log_lik;
   target += normal_lpdf(theta | 0, sds);
   // implicit: pi ~ dirichlet(ones)
 }
+
 generated quantities {
   vector[p] beta = R_ast_inverse * theta;            // coefficients on X
   vector[p] OR = exp(beta);
